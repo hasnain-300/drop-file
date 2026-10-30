@@ -10,6 +10,8 @@ import {
   PlayCircle
 } from 'lucide-react';
 import { getFileIconInfo } from '../lib/icons';
+import { SignalStrengthIndicator } from './SignalStrengthIndicator';
+import { PeerSignalQuality } from '../webrtc/peer';
 
 export interface FileQueueItem {
   id: number;
@@ -26,10 +28,14 @@ export interface FileQueueItem {
 
 interface FileQueueProps {
   files: FileQueueItem[];
+  title?: string;
   onCancel?: (id: number) => void;
   onRetry?: (id: number) => void;
   onPause?: (id: number) => void;
   onResume?: (id: number) => void;
+  onClearCompleted?: () => void;
+  signalQuality?: PeerSignalQuality | null;
+  isTransferring?: boolean;
 }
 
 function formatTime(seconds: number) {
@@ -108,8 +114,22 @@ function Thumbnail({ file, url, type, name }: { file?: File, url?: string, type?
 
 type FilterType = 'All' | 'Images' | 'Videos' | 'Documents' | 'Other';
 
-export function FileQueue({ files, onCancel, onRetry, onPause, onResume }: FileQueueProps) {
+export function FileQueue({ 
+  files, 
+  title, 
+  onCancel, 
+  onRetry, 
+  onPause, 
+  onResume, 
+  onClearCompleted,
+  signalQuality,
+  isTransferring
+}: FileQueueProps) {
   const [filter, setFilter] = useState<FilterType>('All');
+
+  const hasCompletedOrCancelled = useMemo(() => {
+    return files.some(f => f.status === 'completed' || f.status === 'cancelled');
+  }, [files]);
 
   const filteredFiles = useMemo(() => {
     return files.filter(file => {
@@ -134,9 +154,29 @@ export function FileQueue({ files, onCancel, onRetry, onPause, onResume }: FileQ
   return (
     <div className="space-y-3 w-full mt-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
-        <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-          Transfer Queue ({files.length})
-        </h3>
+        <div className="flex flex-wrap items-center gap-3">
+          <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
+            <span>{title || 'Transfer Queue'}</span>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400 font-mono font-bold">
+              {files.length}
+            </span>
+          </h3>
+          {signalQuality && (
+            <SignalStrengthIndicator 
+              quality={signalQuality} 
+              isTransferring={isTransferring} 
+              variant="compact"
+            />
+          )}
+          {onClearCompleted && hasCompletedOrCancelled && (
+            <button
+              onClick={onClearCompleted}
+              className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors"
+            >
+              Clear Finished
+            </button>
+          )}
+        </div>
         
         <div className="flex flex-wrap gap-2">
           {(['All', 'Images', 'Videos', 'Documents', 'Other'] as FilterType[]).map((f) => (

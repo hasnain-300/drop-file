@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { getHistoryRecords, deleteHistoryRecord, clearHistory, TransferHistoryRecord } from '../lib/db';
 import { Download, Trash2, CheckCircle, XCircle, AlertCircle, File as FileIcon, History as HistoryIcon, ArrowUpRight, ArrowDownLeft, Search } from 'lucide-react';
 import { toast } from 'react-hot-toast';
@@ -230,45 +231,50 @@ export function History() {
         )}
       </AnimatePresence>
 
-      <AnimatePresence>
-        {showClearConfirm && (
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
-          >
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-white dark:bg-gray-900 p-8 rounded-[2.5rem] w-full max-w-md shadow-2xl border border-gray-100 dark:border-gray-800"
-            >
-              <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Trash2 className="w-8 h-8 text-red-600 dark:text-red-400" />
-              </div>
-              <h3 className="text-2xl font-bold text-gray-900 dark:text-white text-center mb-4">Clear All History?</h3>
-              <p className="text-gray-500 dark:text-gray-400 text-center mb-8 leading-relaxed">
-                This will permanently delete all transfer records and saved files. This action cannot be undone.
-              </p>
-              <div className="grid grid-cols-2 gap-4">
-                <button
-                  onClick={() => setShowClearConfirm(false)}
-                  className="py-3.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-2xl text-sm font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleClearAll}
-                  className="py-3.5 bg-red-600 text-white rounded-2xl text-sm font-bold hover:bg-red-700 transition-all shadow-xl shadow-red-500/20"
-                >
-                  Yes, Clear All
-                </button>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {typeof document !== 'undefined' && createPortal(
+        <AnimatePresence>
+          {showClearConfirm && (
+            <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+              <motion.div 
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={() => setShowClearConfirm(false)}
+                className="fixed inset-0 bg-black/80 backdrop-blur-md"
+              />
+              <motion.div 
+                initial={{ scale: 0.9, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.9, opacity: 0 }}
+                className="relative bg-white dark:bg-gray-900 p-8 rounded-[2.5rem] w-full max-w-md shadow-2xl border border-gray-100 dark:border-gray-800 z-[101]"
+              >
+                <div className="w-16 h-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <Trash2 className="w-8 h-8 text-red-600 dark:text-red-400" />
+                </div>
+                <h3 className="text-2xl font-bold text-gray-900 dark:text-white text-center mb-4">Clear All History?</h3>
+                <p className="text-gray-500 dark:text-gray-400 text-center mb-8 leading-relaxed">
+                  This will permanently delete all transfer records and saved files. This action cannot be undone.
+                </p>
+                <div className="grid grid-cols-2 gap-4">
+                  <button
+                    onClick={() => setShowClearConfirm(false)}
+                    className="py-3.5 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 rounded-2xl text-sm font-bold hover:bg-gray-200 dark:hover:bg-gray-700 transition-all"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleClearAll}
+                    className="py-3.5 bg-red-600 text-white rounded-2xl text-sm font-bold hover:bg-red-700 transition-all shadow-xl shadow-red-500/20"
+                  >
+                    Yes, Clear All
+                  </button>
+                </div>
+              </motion.div>
+            </div>
+          )}
+        </AnimatePresence>,
+        document.body
+      )}
     </motion.div>
   );
 }

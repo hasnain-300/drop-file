@@ -1,4 +1,5 @@
 import { encryptChunk, encryptText } from '../lib/crypto';
+import { sessionMetrics } from '../lib/sessionMetrics';
 
 export class FileSender {
   private channel: RTCDataChannel;
@@ -118,6 +119,7 @@ export class FileSender {
       
       this.channel.send(combined.buffer);
       this.offset += buffer.byteLength;
+      sessionMetrics.recordTransfer(buffer.byteLength, 'sent');
       
       this.reportProgress();
 

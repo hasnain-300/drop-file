@@ -33,6 +33,16 @@
     border: 1px solid var(--card-border);
     box-shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.4);
   }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
+  }
+
+  .no-scrollbar {
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
+  }
 }
 
 @theme {
@@ -47,21 +57,22 @@
   border-radius: 1.5rem;
 }
 
-/* Custom scrollbar */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+/* Universal scrollbar hiding for the entire app, modals, dialogs, and scrollable panels */
+html,
+body,
+*,
+*::before,
+*::after {
+  scrollbar-width: none !important;
+  -ms-overflow-style: none !important;
 }
 
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(15, 23, 42, 0.1);
-  border-radius: 10px;
-}
-
-.dark ::-webkit-scrollbar-thumb {
-  background: rgba(248, 250, 252, 0.1);
+::-webkit-scrollbar,
+*::-webkit-scrollbar,
+html::-webkit-scrollbar,
+body::-webkit-scrollbar {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  background: transparent !important;
 }

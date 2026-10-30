@@ -1,4 +1,5 @@
 import { decryptChunk } from '../lib/crypto';
+import { sessionMetrics } from '../lib/sessionMetrics';
 
 export class FileReceiver {
   private receivedSize = 0;
@@ -80,6 +81,7 @@ export class FileReceiver {
     }
 
     this.receivedSize += dataToProcess.byteLength;
+    sessionMetrics.recordTransfer(dataToProcess.byteLength, 'received');
     this.reportProgress();
 
     if (this.isInitializing) {
