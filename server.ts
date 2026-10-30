@@ -9,8 +9,23 @@ async function startServer() {
   const server = http.createServer(app);
   const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 
-  // WebSocket Server for Signaling
-  const wss = new WebSocketServer({ server });
+  // Security Hardening: Disable x-powered-by banner
+  app.disable("x-powered-by");
+
+  // Security Hardening: Standard HTTP Security Headers
+  app.use((_req, res, next) => {
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("X-Frame-Options", "SAMEORIGIN");
+    res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+    res.setHeader("X-XSS-Protection", "1; mode=block");
+    next();
+  });
+
+  // WebSocket Server for Signaling with payload limits
+  const wss = new WebSocketServer({ 
+    server,
+    maxPayload: 8 * 1024 * 1024 // 8MB maximum frame size to guard against memory exhaustion
+  });
 
   const rooms = new Map<string, Set<WebSocket>>();
 
@@ -33,16 +48,23 @@ async function startServer() {
       // 2. Text JSON messages
       try {
         const text = message.toString();
+        // Prevent parsing excessively huge text payloads
+        if (text.length > 512 * 1024) return;
         const data = JSON.parse(text);
         const { type, room, payload } = data;
+        const cleanRoom = typeof room === "string" ? room.trim().replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32) : null;
 
         if (type === "join") {
-          currentRoom = room;
-          if (!rooms.has(room)) {
-            rooms.set(room, new Set());
+          if (!cleanRoom) {
+            ws.send(JSON.stringify({ type: "error", message: "Invalid room identifier." }));
+            return;
+          }
+          currentRoom = cleanRoom;
+          if (!rooms.has(cleanRoom)) {
+            rooms.set(cleanRoom, new Set());
           }
           
-          const roomClients = rooms.get(room)!;
+          const roomClients = rooms.get(cleanRoom)!;
 
           // Cleanup any dead/closed sockets first
           for (const client of roomClients) {
@@ -76,7 +98,7 @@ async function startServer() {
           ws.send(JSON.stringify({ type: "ws-pong" }));
         } else if (type === "signal") {
           // Broadcast WebRTC signaling (offer/answer/ice)
-          const targetRoom = room || currentRoom;
+          const targetRoom = cleanRoom || currentRoom;
           if (targetRoom && rooms.has(targetRoom)) {
             rooms.get(targetRoom)!.forEach((client) => {
               if (client !== ws && client.readyState === WebSocket.OPEN) {
@@ -86,7 +108,7 @@ async function startServer() {
           }
         } else if (type === "relay-data") {
           // High-speed relay for application data, control messages, and file metadata
-          const targetRoom = room || currentRoom;
+          const targetRoom = cleanRoom || currentRoom;
           if (targetRoom && rooms.has(targetRoom)) {
             rooms.get(targetRoom)!.forEach((client) => {
               if (client !== ws && client.readyState === WebSocket.OPEN) {
@@ -157,13 +179,19 @@ async function startServer() {
   });
 
   app.post("/api/hotspot/broadcast", (req, res) => {
-    const { roomId, ssid } = req.body;
-    if (!roomId) {
-      return res.status(400).json({ error: "roomId is required" });
+    const { roomId, ssid } = req.body || {};
+    const cleanRoomId = typeof roomId === "string" ? roomId.trim().replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 32) : "";
+    if (!cleanRoomId) {
+      return res.status(400).json({ error: "Valid roomId is required (alphanumeric, max 32 chars)" });
     }
+
+    const cleanSsid = typeof ssid === "string" 
+      ? ssid.trim().replace(/[^\w\s-]/gi, "").slice(0, 48)
+      : `FastShare-Direct-${cleanRoomId}`;
+
     activeHotspotSignal = {
-      roomId,
-      ssid: ssid || `FastShare-Direct-${roomId}`,
+      roomId: cleanRoomId,
+      ssid: cleanSsid,
       timestamp: Date.now(),
     };
     
@@ -194,14 +222,19 @@ async function startServer() {
 
   app.get("/api/installation-status", (req, res) => {
     const rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
-    const ip = String(rawIp).split(',')[0].trim();
+    const ip = String(rawIp).split(',')[0].trim().slice(0, 64);
     res.json({ isInstalled: installedIps.has(ip), ip });
   });
 
   app.post("/api/mark-installed", (req, res) => {
     const rawIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '';
-    const ip = String(rawIp).split(',')[0].trim();
+    const ip = String(rawIp).split(',')[0].trim().slice(0, 64);
     if (ip) {
+      // Memory protection: limit set size to 1,000 entries
+      if (installedIps.size >= 1000) {
+        const first = installedIps.values().next().value;
+        if (first) installedIps.delete(first);
+      }
       installedIps.add(ip);
     }
     res.json({ success: true, ip });

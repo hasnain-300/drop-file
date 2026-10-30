@@ -182,10 +182,11 @@ export function Receive() {
               updateHistoryRecord(dbId, { status: 'completed', blob: file });
               toast.success(`File received: ${file.name}`);
               
-              // Auto download
+              // Auto download with path-traversal protection
+              const sanitizedName = (file.name || 'received_file').replace(/[/\\?%*:|"<>]/g, '_');
               const a = document.createElement('a');
               a.href = url;
-              a.download = file.name;
+              a.download = sanitizedName;
               document.body.appendChild(a);
               a.click();
               document.body.removeChild(a);
