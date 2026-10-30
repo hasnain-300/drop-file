@@ -5,6 +5,8 @@ import { PeerConnection, PeerSignalQuality } from '../webrtc/peer';
 import { FileReceiver } from '../webrtc/fileReceiver';
 import { FileQueue, FileQueueItem } from '../components/FileQueue';
 import { SignalStrengthIndicator } from '../components/SignalStrengthIndicator';
+import { PeerBatteryIndicator, LowBatteryAlertBanner } from '../components/PeerBatteryIndicator';
+import { subscribeLocalBattery, PeerBatteryState } from '../lib/battery';
 import { Download, AlertCircle, RefreshCw, KeyRound, Lock, QrCode, Scan, ArrowLeft, File, CheckCircle, Wifi, WifiOff, ShieldCheck, Clock, Radio } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 import { QRCodeSVG } from 'qrcode.react';
@@ -55,10 +57,36 @@ export function Receive() {
   const [isDisconnecting, setIsDisconnecting] = useState(false);
   const [transportMode, setTransportMode] = useState<'p2p' | 'relay'>('p2p');
   const [signalQuality, setSignalQuality] = useState<PeerSignalQuality | null>(null);
+  const [localBattery, setLocalBattery] = useState<PeerBatteryState | null>(null);
+  const [remoteBattery, setRemoteBattery] = useState<PeerBatteryState | null>(null);
+  const localBatteryRef = useRef<PeerBatteryState | null>(null);
   const [idleCountdown, setIdleCountdown] = useState<number>(60);
   const [isTransferringActive, setIsTransferringActive] = useState(false);
   const peerRef = useRef<PeerConnection | null>(null);
   const receiversRef = useRef<Map<number, FileReceiver>>(new Map());
+
+  // Subscribe to Web Battery API
+  useEffect(() => {
+    const unsub = subscribeLocalBattery((state) => {
+      setLocalBattery(state);
+      localBatteryRef.current = state;
+      if (peerRef.current && peerConnected) {
+        peerRef.current.sendMessage?.({ type: 'battery-status', payload: state }).catch(() => {});
+      }
+    });
+    return () => unsub();
+  }, [peerConnected]);
+
+  // Periodic heartbeat sync of battery status during active connection
+  useEffect(() => {
+    if (!peerConnected) return;
+    const interval = setInterval(() => {
+      if (peerRef.current && localBatteryRef.current) {
+        peerRef.current.sendMessage?.({ type: 'battery-status', payload: localBatteryRef.current }).catch(() => {});
+      }
+    }, 20000);
+    return () => clearInterval(interval);
+  }, [peerConnected]);
 
   const setupDataChannel = (peer: PeerConnection, channel: any, key?: string) => {
     const sendMessage = async (message: any) => {
@@ -115,6 +143,11 @@ export function Receive() {
           if (data.type === 'encrypted' && key) {
             const decrypted = await decryptText(data.payload, key);
             data = JSON.parse(decrypted);
+          }
+
+          if (data.type === 'battery-status' && data.payload) {
+            setRemoteBattery(data.payload);
+            return;
           }
 
           if (data.type === 'metadata') {
@@ -213,6 +246,11 @@ export function Receive() {
         receiversRef.current.get(fileId)?.receiveChunk(chunk);
       }
     };
+
+    // Send initial battery status to sender once data channel is ready
+    if (localBatteryRef.current) {
+      sendMessage({ type: 'battery-status', payload: localBatteryRef.current }).catch(() => {});
+    }
   };
 
   useEffect(() => {
@@ -807,6 +845,12 @@ export function Receive() {
                           isTransferring={isTransferringActive}
                           variant="compact"
                         />
+                        <PeerBatteryIndicator
+                          localBattery={localBattery}
+                          remoteBattery={remoteBattery}
+                          isTransferring={isTransferringActive}
+                          variant="compact"
+                        />
                       </div>
 
                       <div className="flex items-center space-x-2 text-xs font-medium text-gray-500 dark:text-gray-400 bg-gray-50 dark:bg-gray-800/40 px-3.5 py-2 rounded-xl border border-gray-200/50 dark:border-gray-700/50">
@@ -829,6 +873,13 @@ export function Receive() {
                     </motion.button>
                   </div>
 
+                  {/* Low battery warning banner during active reception */}
+                  <LowBatteryAlertBanner
+                    localBattery={localBattery}
+                    remoteBattery={remoteBattery}
+                    isTransferring={isTransferringActive}
+                  />
+
                   {files.length === 0 ? (
                     <motion.div 
                       initial={{ opacity: 0, y: 10 }}
@@ -850,6 +901,8 @@ export function Receive() {
                         onResume={handleResume}
                         signalQuality={signalQuality}
                         isTransferring={isTransferringActive}
+                        localBattery={localBattery}
+                        remoteBattery={remoteBattery}
                       />
 
                       {/* D3 Transfer Rate Chart */}

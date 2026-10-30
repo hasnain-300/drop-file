@@ -11,7 +11,9 @@ import {
 } from 'lucide-react';
 import { getFileIconInfo } from '../lib/icons';
 import { SignalStrengthIndicator } from './SignalStrengthIndicator';
+import { PeerBatteryIndicator, LowBatteryAlertBanner } from './PeerBatteryIndicator';
 import { PeerSignalQuality } from '../webrtc/peer';
+import { PeerBatteryState } from '../lib/battery';
 
 export interface FileQueueItem {
   id: number;
@@ -36,6 +38,8 @@ interface FileQueueProps {
   onClearCompleted?: () => void;
   signalQuality?: PeerSignalQuality | null;
   isTransferring?: boolean;
+  localBattery?: PeerBatteryState | null;
+  remoteBattery?: PeerBatteryState | null;
 }
 
 function formatTime(seconds: number) {
@@ -123,9 +127,12 @@ export function FileQueue({
   onResume, 
   onClearCompleted,
   signalQuality,
-  isTransferring
+  isTransferring,
+  localBattery,
+  remoteBattery
 }: FileQueueProps) {
   const [filter, setFilter] = useState<FilterType>('All');
+  const [dismissLowBattery, setDismissLowBattery] = useState(false);
 
   const hasCompletedOrCancelled = useMemo(() => {
     return files.some(f => f.status === 'completed' || f.status === 'cancelled');
@@ -153,6 +160,16 @@ export function FileQueue({
 
   return (
     <div className="space-y-3 w-full mt-6">
+      {/* Low Battery Warning Banner During Active File Transfers */}
+      {!dismissLowBattery && (
+        <LowBatteryAlertBanner
+          localBattery={localBattery}
+          remoteBattery={remoteBattery}
+          isTransferring={isTransferring}
+          onDismiss={() => setDismissLowBattery(true)}
+        />
+      )}
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <h3 className="text-sm font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
@@ -165,6 +182,14 @@ export function FileQueue({
             <SignalStrengthIndicator 
               quality={signalQuality} 
               isTransferring={isTransferring} 
+              variant="compact"
+            />
+          )}
+          {(localBattery || remoteBattery) && (
+            <PeerBatteryIndicator
+              localBattery={localBattery}
+              remoteBattery={remoteBattery}
+              isTransferring={isTransferring}
               variant="compact"
             />
           )}
